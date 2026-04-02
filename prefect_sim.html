@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Prefect — Live Simulation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;1,400&family=Sora:wght@300;400;600;700;800&display=swap');
+:root{
+  --bg:#0a0f1e;--card:#111827;--border:#1e2d45;
+  --teal:#00d4a8;--orange:#f97316;--red:#ef4444;
+  --green:#22c55e;--white:#f1f5f9;--grey:#64748b;
+  --dim:#1e293b;--purple:#a855f7;--blue:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--white);font-family:'Sora',sans-serif;min-height:100vh;padding-bottom:60px;}
+
+header{padding:20px 40px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;}
+.logo{font-size:22px;font-weight:800;letter-spacing:-1px;}.logo span{color:var(--teal);}
+.hbadge{background:var(--teal);color:#0a0f1e;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:1px;}
+.header-right{margin-left:auto;font-size:12px;color:var(--grey);}
+
+.section-head{padding:22px 40px 0;}
+.section-head h2{font-size:19px;font-weight:700;margin-bottom:4px;}
+.section-head p{font-size:12px;color:var(--grey);line-height:1.6;}
+
+.scenario-box{margin:12px 40px 0;padding:11px 16px;border-radius:8px;background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.2);font-size:12px;color:var(--grey);line-height:1.7;}
+.scenario-box strong{color:var(--orange);display:block;margin-bottom:3px;font-size:12px;}
+
+/* PHASE TRACKER */
+.phase-track{display:flex;align-items:flex-start;gap:0;padding:16px 40px 10px;}
+.phase-item{flex:1;text-align:center;position:relative;}
+.phase-item:not(:last-child)::after{content:'';position:absolute;top:17px;left:60%;width:80%;height:2px;background:var(--border);z-index:0;}
+.phase-dot{width:34px;height:34px;border-radius:50%;border:2px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:13px;position:relative;z-index:1;transition:.4s;}
+.phase-label{font-size:11px;font-weight:700;letter-spacing:.5px;}
+.phase-sub{font-size:9px;color:var(--grey);margin-top:2px;font-family:'IBM Plex Mono',monospace;}
+.phase-badge{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-top:3px;}
+
+.phase-item.idle .phase-dot{border-color:var(--border);}
+.phase-item.idle .phase-label{color:var(--grey);}
+.phase-item.running .phase-dot{border-color:var(--blue);background:rgba(59,130,246,.15);animation:pulse 1s infinite;}
+.phase-item.running .phase-label{color:var(--blue);}
+.phase-item.retrying .phase-dot{border-color:var(--orange);background:rgba(249,115,22,.15);animation:pulse .8s infinite;}
+.phase-item.retrying .phase-label{color:var(--orange);}
+.phase-item.done .phase-dot{border-color:var(--green);background:rgba(34,197,94,.12);}
+.phase-item.done .phase-label{color:var(--green);}
+.phase-item.cached .phase-dot{border-color:var(--purple);background:rgba(168,85,247,.12);}
+.phase-item.cached .phase-label{color:var(--purple);}
+.phase-item.failed .phase-dot{border-color:var(--red);background:rgba(239,68,68,.12);}
+.phase-item.failed .phase-label{color:var(--red);}
+.phase-item.skipped{opacity:.35;}
+
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:10px 40px 14px;}
+.metric{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 14px;text-align:center;}
+.metric-val{font-size:22px;font-weight:700;font-family:'IBM Plex Mono',monospace;}
+.mv-orange{color:var(--orange);}.mv-red{color:var(--red);}.mv-teal{color:var(--teal);}.mv-purple{color:var(--purple);}.mv-green{color:var(--green);}
+.metric-lbl{font-size:9px;color:var(--grey);margin-top:3px;text-transform:uppercase;letter-spacing:.8px;}
+
+/* SIM */
+.sim-wrap{padding:0 40px;}
+.sim-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.sim-col h3{font-size:11px;font-weight:700;margin-bottom:12px;padding-bottom:9px;border-bottom:2px solid;text-transform:uppercase;letter-spacing:1px;}
+.sim-col.old-sim h3{color:var(--orange);border-color:var(--orange);}
+.sim-col.new-sim h3{color:var(--teal);border-color:var(--teal);}
+
+.run-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:.2s;font-family:'Sora',sans-serif;}
+.run-btn.orange{background:var(--orange);color:#fff;}
+.run-btn.teal{background:var(--teal);color:#0a0f1e;}
+.run-btn.dim{background:var(--dim);color:var(--grey);}
+.run-btn:hover{opacity:.85;}.run-btn:disabled{opacity:.32;cursor:not-allowed;}
+.btn-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center;}
+.run-hint{font-size:10px;color:var(--grey);font-family:'IBM Plex Mono',monospace;margin-bottom:12px;line-height:1.5;}
+
+.steps{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+.step{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);transition:.35s;}
+.step-num{font-size:10px;font-weight:700;width:18px;height:18px;border-radius:50%;background:var(--dim);color:var(--grey);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.35s;}
+.step-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0;}
+.step-name{font-size:11px;font-weight:600;flex:1;font-family:'IBM Plex Mono',monospace;}
+.step-status{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:auto;white-space:nowrap;}
+.step-meta{font-size:9px;color:var(--grey);margin-left:5px;font-family:'IBM Plex Mono',monospace;min-width:140px;text-align:right;}
+
+.step.idle .step-status{background:var(--dim);color:var(--grey);}
+.step.running{border-color:var(--blue);background:rgba(59,130,246,.05);}
+.step.running .step-status{background:var(--blue);color:#fff;animation:pulse 1s infinite;}
+.step.running .step-num{background:var(--blue);color:#fff;}
+.step.done{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.04);}
+.step.done .step-status{background:var(--green);color:#fff;}
+.step.done .step-num{background:var(--green);color:#fff;}
+.step.failed{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06);}
+.step.failed .step-status{background:var(--red);color:#fff;}
+.step.failed .step-num{background:var(--red);color:#fff;}
+.step.skipped{opacity:.35;}.step.skipped .step-status{background:var(--dim);color:var(--grey);}
+.step.retrying{border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.05);}
+.step.retrying .step-status{background:var(--orange);color:#fff;animation:pulse 1s infinite;}
+.step.retrying .step-num{background:var(--orange);color:#fff;}
+.step.cached{border-color:rgba(168,85,247,.4);background:rgba(168,85,247,.05);}
+.step.cached .step-status{background:var(--purple);color:#fff;}
+.step.cached .step-num{background:var(--purple);color:#fff;}
+.step.recovered{border-color:rgba(0,212,168,.4);background:rgba(0,212,168,.05);}
+.step.recovered .step-status{background:var(--teal);color:#0a0f1e;}
+.step.recovered .step-num{background:var(--teal);color:#0a0f1e;}
+
+.progress-bar{height:3px;background:var(--border);border-radius:2px;margin-bottom:12px;overflow:hidden;}
+.progress-fill{height:100%;width:0%;transition:width .5s;border-radius:2px;}
+.old-fill{background:var(--orange);}.new-fill{background:var(--teal);}
+
+.terminal{background:#0d1117;border-radius:8px;padding:10px 13px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.78;height:210px;overflow-y:auto;border:1px solid var(--border);}
+.log-line{display:flex;gap:8px;animation:fadein .22s;}
+@keyframes fadein{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;}}
+.log-ts{color:var(--grey);flex-shrink:0;}
+.log-ok{color:var(--green);}.log-err{color:var(--red);}.log-warn{color:var(--orange);}
+.log-info{color:#79c0ff;}.log-silent{color:#1e2d45;font-style:italic;}
+.log-cache{color:var(--purple);}.log-recover{color:var(--teal);}
+
+.result-box{margin-top:10px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;text-align:center;display:none;line-height:1.5;}
+.result-box.show{display:block;}
+.result-box.fail{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:var(--red);}
+.result-box.success{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:var(--green);}
+.result-box.warn{background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:var(--orange);}
+
+/* CACHE STORE */
+.cache-wrap{padding:12px 40px 0;}
+.cache-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.cache-header h3{font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:1px;}
+.cache-header span{font-size:11px;color:var(--grey);}
+.cache-store{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.cache-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:11px;animation:fadein .35s;}
+.cache-row:last-child{border-bottom:none;}
+.cache-badge{font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;flex-shrink:0;}
+.cache-badge.stored{background:rgba(168,85,247,.15);color:var(--purple);}
+.cache-badge.hit{background:rgba(0,212,168,.15);color:var(--teal);}
+.cache-key{font-family:'IBM Plex Mono',monospace;color:var(--white);flex:1;font-size:11px;}
+.cache-val{font-family:'IBM Plex Mono',monospace;color:var(--grey);font-size:10px;}
+.cache-ts{font-size:10px;color:#1e2d45;font-family:'IBM Plex Mono',monospace;margin-left:auto;}
+.cache-empty{padding:14px;font-size:11px;color:#243044;text-align:center;font-style:italic;}
+
+/* CLOUD */
+.cloud-wrap{padding:12px 40px 0;}
+.cloud-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.cloud-header h3{font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:1px;}
+.cloud-header span{font-size:11px;color:var(--grey);}
+.cloud-runs{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.cloud-run-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:11px;animation:fadein .4s;}
+.cloud-run-row:last-child{border-bottom:none;}
+.run-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.run-dot.green{background:var(--green);}.run-dot.red{background:var(--red);}
+.cloud-run-name{font-family:'IBM Plex Mono',monospace;flex:1;color:var(--white);}
+.cloud-run-badge{font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;}
+.badge-fail{background:rgba(239,68,68,.15);color:var(--red);}
+.badge-success{background:rgba(34,197,94,.15);color:var(--green);}
+.cloud-run-note{font-size:10px;color:var(--teal);font-family:'IBM Plex Mono',monospace;}
+.cloud-run-dur{font-size:10px;color:var(--grey);font-family:'IBM Plex Mono',monospace;}
+.cloud-run-ts{font-size:10px;color:#1e2d45;font-family:'IBM Plex Mono',monospace;margin-left:auto;}
+.cloud-empty{padding:14px;font-size:11px;color:#243044;text-align:center;font-style:italic;}
+
+.key-moment{margin:12px 40px 0;display:none;padding:11px 16px;border-radius:8px;font-size:12px;font-weight:600;text-align:center;line-height:1.6;}
+.key-moment.show{display:block;}
+.key-moment.warn{background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.25);color:var(--orange);}
+.key-moment.resume{background:rgba(0,212,168,.07);border:1px solid rgba(0,212,168,.25);color:var(--teal);}
+
+.mantra{text-align:center;padding:22px 40px;font-size:14px;font-weight:600;color:var(--grey);border-top:1px solid var(--border);margin-top:20px;}
+.mantra span{color:var(--teal);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Pre<span>fect</span></div>
+  <div class="hbadge">LIVE DEMO</div>
+  <div class="header-right">Shruti Deulgaokar &nbsp;·&nbsp; Ashish Wagle &nbsp;·&nbsp; Lavannya Patil</div>
+</header>
+
+<div class="section-head">
+  <h2>Phase 1 succeeds → Phase 2 hits ConnectionError → retries → environment recovers → done</h2>
+  <p>Cron dies at Phase 2 and restarts everything from scratch. Prefect retries Phase 2 until the environment recovers — Phase 1 never re-runs.</p>
+</div>
+
+<div class="scenario-box">
+  <strong>The Scenario</strong>
+  Phase 1 (fetch_data) completes successfully — result stored in cache.
+  Phase 2 (transform) hits a ConnectionError to the processing service. Cron crashes and discards everything.
+  Prefect retries Phase 2 automatically — on attempt 3 the environment recovers and transform succeeds.
+  Phase 3 (save) runs. Pipeline complete. Phase 1 was never repeated.
+</div>
+
+<!-- PHASE TRACKER -->
+<div class="phase-track">
+  <div class="phase-item idle" id="pt-1">
+    <div class="phase-dot">📡</div>
+    <div class="phase-label">Phase 1</div>
+    <div class="phase-sub" id="pt-1-sub">fetch_data</div>
+  </div>
+  <div class="phase-item idle" id="pt-2">
+    <div class="phase-dot">⚙️</div>
+    <div class="phase-label">Phase 2</div>
+    <div class="phase-sub" id="pt-2-sub">transform</div>
+  </div>
+  <div class="phase-item idle" id="pt-3">
+    <div class="phase-dot">💾</div>
+    <div class="phase-label">Phase 3</div>
+    <div class="phase-sub" id="pt-3-sub">save</div>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="metric"><div class="metric-val mv-orange" id="m-cron">0</div><div class="metric-lbl">cron full restarts</div></div>
+  <div class="metric"><div class="metric-val mv-red" id="m-wasted">0</div><div class="metric-lbl">wasted phase 1 calls</div></div>
+  <div class="metric"><div class="metric-val mv-teal" id="m-retry">0</div><div class="metric-lbl">prefect auto-retries</div></div>
+  <div class="metric"><div class="metric-val mv-purple" id="m-cache">0</div><div class="metric-lbl">cache hits</div></div>
+  <div class="metric"><div class="metric-val mv-green" id="m-saved">0s</div><div class="metric-lbl">fetch time saved</div></div>
+</div>
+
+<div class="sim-wrap">
+  <div class="sim-layout">
+
+    <!-- OLD -->
+    <div class="sim-col old-sim">
+      <h3>✗ Cron — crashes, restarts from Phase 1</h3>
+      <div class="btn-row">
+        <button class="run-btn orange" id="btn-old" onclick="runOld()">▶ Run Pipeline</button>
+        <button class="run-btn dim" onclick="resetOld()">↺ Reset</button>
+      </div>
+      <div class="run-hint" id="old-hint">Run once: Phase 1 succeeds, Phase 2 ConnectionError → crash.<br>Run again: Cron repeats Phase 1 from scratch.</div>
+      <div class="progress-bar"><div class="progress-fill old-fill" id="old-progress"></div></div>
+      <div class="steps">
+        <div class="step idle" id="old-s1">
+          <span class="step-num">1</span><span class="step-icon">📡</span>
+          <span class="step-name">fetch_data()</span>
+          <span class="step-status">idle</span>
+          <span class="step-meta" id="old-m1"></span>
+        </div>
+        <div class="step idle" id="old-s2">
+          <span class="step-num">2</span><span class="step-icon">⚙️</span>
+          <span class="step-name">transform()</span>
+          <span class="step-status">idle</span>
+          <span class="step-meta" id="old-m2"></span>
+        </div>
+        <div class="step idle" id="old-s3">
+          <span class="step-num">3</span><span class="step-icon">💾</span>
+          <span class="step-name">save()</span>
+          <span class="step-status">idle</span>
+          <span class="step-meta" id="old-m3"></span>
+        </div>
+      </div>
+      <div class="terminal" id="old-log"></div>
+      <div class="result-box" id="old-result"></div>
+    </div>
+
+    <!-- NEW -->
+    <div class="sim-col new-sim">
+      <h3>✓ Prefect — retries Phase 2, Phase 1 from cache</h3>
+      <div class="btn-row">
+        <button class="run-btn teal" id="btn-pf" onclick="runPrefect()">▶ Run Pipeline</button>
+        <button class="run-btn dim" onclick="resetNew()">↺ Reset</button>
+      </div>
+      <div class="run-hint" id="pf-hint">Single run — Phase 1 caches, Phase 2 retries through ConnectionError, environment recovers, pipeline completes.</div>
+      <div class="progress-bar"><div class="progress-fill new-fill" id="new-progress"></div></div>
+      <div class="steps">
+        <div class="step idle" id="new-s1">
+          <span class="step-num">1</span><span class="step-icon">📡</span>
+          <span class="step-name">fetch_data()</span>
+          <span class="step-status">idle</span>
+          <span class="step-meta" id="new-m1"></span>
+        </div>
+        <div class="step idle" id="new-s2">
+          <span class="step-num">2</span><span class="step-icon">⚙️</span>
+          <span class="step-name">transform()</span>
+          <span class="step-status">idle</span>
+          <span class="step-meta" id="new-m2"></span>
+        </div>
+        <div class="step idle" id="new-s3">
+          <span class="step-num">3</span><span class="step-icon">💾</span>
+          <span class="step-name">save()</span>
+          <span class="step-status">idle</span>
+          <span class="step-meta" id="new-m3"></span>
+        </div>
+      </div>
+      <div class="terminal" id="new-log"></div>
+      <div class="result-box" id="new-result"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="key-moment" id="key-moment"></div>
+
+<!-- CACHE STORE -->
+<div class="cache-wrap">
+  <div class="cache-header">
+    <h3>Prefect Result Cache</div>
+    <span>Phase 1 stored after first success — reused across all retries</span>
+  </div>
+  <div class="cache-store" id="cache-store">
+    <div class="cache-empty">Cache is empty — Phase 1 will populate this when it completes</div>
+  </div>
+</div>
+
+<!-- CLOUD -->
+<div class="cloud-wrap">
+  <div class="cloud-header">
+    <h3>Prefect Cloud</h3>
+    <span>app.prefect.cloud — flow run history</span>
+  </div>
+  <div class="cloud-runs" id="cloud-runs">
+    <div class="cloud-empty">No runs yet</div>
+  </div>
+</div>
+
+<div class="mantra">
+  "Cron forgets everything when it fails — <span>Prefect remembers what worked and retries what didn't.</span>"
+</div>
+
+<script>
+let oldRunning=false, pfRunning=false, oldRunCount=0;
+let cronRestarts=0, wastedFetches=0, pfRetries=0, cacheHitsCount=0, timeSaved=0;
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function ts(){return new Date().toLocaleTimeString('en',{hour12:false});}
+
+function setStep(id,state,label,meta){
+  const el=document.getElementById(id);
+  el.className='step '+state;
+  el.querySelector('.step-status').textContent=label;
+  const mid=id.replace('-s','-m');
+  const mel=document.getElementById(mid);
+  if(mel&&meta!==undefined) mel.textContent=meta;
+}
+
+function setPhase(num,state,sub){
+  const el=document.getElementById('pt-'+num);
+  el.className='phase-item '+state;
+  if(sub) document.getElementById('pt-'+num+'-sub').textContent=sub;
+}
+
+function addLog(id,type,msg){
+  const log=document.getElementById(id);
+  const div=document.createElement('div');
+  div.className='log-line';
+  div.innerHTML=`<span class="log-ts">${ts()}</span><span class="log-${type}">${msg}</span>`;
+  log.appendChild(div);
+  log.scrollTop=log.scrollHeight;
+}
+
+function setProgress(id,pct){document.getElementById(id).style.width=pct+'%';}
+
+function showResult(id,type,msg){
+  const el=document.getElementById(id);
+  el.className='result-box show '+type;
+  el.textContent=msg;
+}
+
+function showKeyMoment(cls,msg){
+  const el=document.getElementById('key-moment');
+  el.className='key-moment show '+cls;
+  el.textContent=msg;
+}
+
+function updateMetrics(){
+  document.getElementById('m-cron').textContent=cronRestarts;
+  document.getElementById('m-wasted').textContent=wastedFetches;
+  document.getElementById('m-retry').textContent=pfRetries;
+  document.getElementById('m-cache').textContent=cacheHitsCount;
+  document.getElementById('m-saved').textContent=timeSaved+'s';
+}
+
+function addCacheEntry(badgeCls,badgeText,key,val){
+  const store=document.getElementById('cache-store');
+  const empty=store.querySelector('.cache-empty');
+  if(empty) empty.remove();
+  const row=document.createElement('div');
+  row.className='cache-row';
+  row.id='cr-'+key.replace(/\W/g,'');
+  row.innerHTML=
+    `<span class="cache-badge ${badgeCls}">${badgeText}</span>`+
+    `<span class="cache-key">${key}</span>`+
+    `<span class="cache-val">${val}</span>`+
+    `<span class="cache-ts">${ts()}</span>`;
+  store.appendChild(row);
+}
+
+function markCacheHit(key){
+  const rowId='cr-'+key.replace(/\W/g,'');
+  const row=document.getElementById(rowId);
+  if(!row) return;
+  row.querySelector('.cache-badge').className='cache-badge hit';
+  row.querySelector('.cache-badge').textContent='HIT';
+  row.querySelector('.cache-ts').textContent='used '+ts();
+}
+
+function addCloudRun(name,status,note,dur){
+  const c=document.getElementById('cloud-runs');
+  const empty=c.querySelector('.cloud-empty');
+  if(empty) empty.remove();
+  const row=document.createElement('div');
+  row.className='cloud-run-row';
+  row.innerHTML=
+    `<div class="run-dot ${status==='COMPLETED'?'green':'red'}"></div>`+
+    `<div class="cloud-run-name">${name}</div>`+
+    `<span class="cloud-run-badge ${status==='COMPLETED'?'badge-success':'badge-fail'}">${status}</span>`+
+    `<span class="cloud-run-note">${note}</span>`+
+    `<span class="cloud-run-dur">${dur}</span>`+
+    `<span class="cloud-run-ts">${ts()}</span>`;
+  c.insertBefore(row,c.firstChild);
+}
+
+function resetSteps(prefix){
+  [1,2,3].forEach(n=>{
+    const el=document.getElementById(`${prefix}-s${n}`);
+    el.className='step idle';
+    el.querySelector('.step-status').textContent='idle';
+    const mel=document.getElementById(`${prefix}-m${n}`);
+    if(mel) mel.textContent='';
+  });
+}
+
+// ── OLD PIPELINE ──
+async function runOld(){
+  if(oldRunning) return;
+  oldRunning=true;
+  oldRunCount++;
+  document.getElementById('btn-old').disabled=true;
+  document.getElementById('old-result').className='result-box';
+  document.getElementById('old-log').innerHTML='';
+  document.getElementById('key-moment').className='key-moment';
+  setProgress('old-progress',0);
+  resetSteps('old');
+
+  const isRerun = oldRunCount > 1;
+
+  if(isRerun){
+    addLog('old-log','warn',`[CRON] Run ${oldRunCount} — starting from Phase 1 again (no cache)`);
+    document.getElementById('old-hint').textContent=`Run ${oldRunCount}: Phase 1 runs again — same wasted API call as before.`;
+  } else {
+    addLog('old-log','info','[CRON] Firing etl.py — starting pipeline');
+  }
+  await sleep(350);
+
+  // Phase 1 — always runs fully (no cache)
+  setStep('old-s1','running','running', isRerun ? 'running again — no cache' : 'fetching from API...');
+  setProgress('old-progress',10);
+  addLog('old-log','info','[PHASE 1] fetch_data() started'+(isRerun?' — repeating wasted fetch':''));
+  await sleep(1800);
+
+  setStep('old-s1','done','done', isRerun ? 'done again — wasted!' : 'success');
+  setProgress('old-progress',33);
+  addLog('old-log','ok','[PHASE 1] fetch_data() completed'+(isRerun?' (Phase 1 wasted again — no cache)':''));
+  if(isRerun){ wastedFetches++; updateMetrics(); }
+  await sleep(400);
+
+  // Phase 2 — always hits ConnectionError, no retry, crashes
+  setStep('old-s2','running','running','connecting to transform service...');
+  setProgress('old-progress',50);
+  addLog('old-log','info','[PHASE 2] transform() started');
+  await sleep(800);
+  addLog('old-log','err','[PHASE 2] ConnectionError: transform service unavailable');
+  await sleep(300);
+  addLog('old-log','err','            EnvironmentError: upstream service timeout (503)');
+  await sleep(300);
+  addLog('old-log','err','[CRASH] No retry configured. Pipeline terminated.');
+  await sleep(300);
+  addLog('old-log','silent','[CRON]  Phase 1 result discarded. No cache stored.');
+  addLog('old-log','silent','        Next run will repeat Phase 1 from scratch.');
+  addLog('old-log','silent','        Manual intervention required.');
+
+  setStep('old-s2','failed','FAILED','ConnectionError — no retry');
+  setStep('old-s3','skipped','skipped','never ran');
+  setProgress('old-progress',66);
+
+  cronRestarts++; wastedFetches++;
+  updateMetrics();
+
+  showResult('old-result','fail',
+    isRerun
+      ? `Run ${oldRunCount}: Phase 1 ran again for nothing. Same ConnectionError. Same crash. Zero progress.`
+      : 'Phase 2 hit ConnectionError. No retry. Everything lost. Next cron run repeats Phase 1 from scratch.'
+  );
+
+  if(!isRerun){
+    showKeyMoment('warn','Phase 1 result was thrown away. Hit Run Pipeline again — watch Cron waste time repeating Phase 1.');
+  }
+
+  oldRunning=false;
+  document.getElementById('btn-old').disabled=false;
+}
+
+function resetOld(){
+  oldRunning=false; oldRunCount=0;
+  document.getElementById('btn-old').disabled=false;
+  document.getElementById('old-log').innerHTML='';
+  document.getElementById('old-result').className='result-box';
+  document.getElementById('old-hint').textContent='Run once: Phase 1 succeeds, Phase 2 ConnectionError → crash.\nRun again: Cron repeats Phase 1 from scratch.';
+  document.getElementById('key-moment').className='key-moment';
+  setProgress('old-progress',0);
+  resetSteps('old');
+}
+
+// ── PREFECT PIPELINE ──
+// Single run — Phase 1 succeeds + cached, Phase 2 retries 2x then environment recovers, Phase 3 completes
+const runNames=['sandy-spoonbill','clever-falcon','bright-condor','swift-osprey'];
+let pfCount=0;
+
+async function runPrefect(){
+  if(pfRunning) return;
+  pfRunning=true;
+  document.getElementById('btn-pf').disabled=true;
+  document.getElementById('new-result').className='result-box';
+  document.getElementById('new-log').innerHTML='';
+  document.getElementById('key-moment').className='key-moment';
+  setProgress('new-progress',0);
+  resetSteps('new');
+  [1,2,3].forEach(n=>setPhase(n,'idle',['fetch_data','transform','save'][n-1]));
+
+  const name=runNames[pfCount%runNames.length];
+  pfCount++;
+
+  addLog('new-log','info',`Flow run '${name}' — ETL Pipeline`);
+  await sleep(300);
+
+  // ── PHASE 1: succeeds, result cached ──
+  setPhase(1,'running','fetching...');
+  setStep('new-s1','running','running','fetching from API...');
+  setProgress('new-progress',8);
+  addLog('new-log','info','[PHASE 1] fetch_data() started');
+  await sleep(1800);
+
+  setPhase(1,'cached','cached ✓');
+  setStep('new-s1','done','done','success · result cached');
+  setProgress('new-progress',33);
+  addLog('new-log','ok','[PHASE 1] fetch_data() completed successfully');
+  addLog('new-log','cache','Prefect: Phase 1 result stored in cache (task_input_hash)');
+  addCacheEntry('stored','STORED','fetch_data::hash:a3f9c2','{posts: [{id:1, title:"SUNT..."}]}');
+  await sleep(500);
+
+  // ── PHASE 2: ConnectionError on attempt 1 ──
+  setPhase(2,'running','connecting...');
+  setStep('new-s2','running','running','connecting to transform service...');
+  setProgress('new-progress',40);
+  addLog('new-log','info','[PHASE 2] transform() started — attempt 1/3');
+  await sleep(900);
+
+  setPhase(2,'retrying','retry 1/3');
+  setStep('new-s2','retrying','retry 1/3','ConnectionError — retrying');
+  addLog('new-log','err','[PHASE 2] ConnectionError: transform service unavailable (503)');
+  addLog('new-log','err','            EnvironmentError: upstream service timeout');
+  addLog('new-log','warn','Prefect: retrying automatically in 5s... (1/3)');
+  addLog('new-log','warn','Prefect: Phase 1 result safely in cache — not repeating it');
+  pfRetries++; updateMetrics();
+  await sleep(1400);
+
+  // ── PHASE 2: ConnectionError on attempt 2 ──
+  setStep('new-s2','retrying','retry 2/3','attempt 2 — still down');
+  setProgress('new-progress',50);
+  addLog('new-log','warn','[PHASE 2] transform() — attempt 2/3');
+  await sleep(900);
+
+  addLog('new-log','err','[PHASE 2] ConnectionError: transform service still unavailable');
+  addLog('new-log','warn','Prefect: retrying automatically in 5s... (2/3)');
+  pfRetries++; updateMetrics();
+  await sleep(1400);
+
+  // ── PHASE 2: attempt 3 — environment recovers ──
+  setPhase(2,'running','recovering...');
+  setStep('new-s2','running','attempt 3/3','environment recovering...');
+  setProgress('new-progress',58);
+  addLog('new-log','warn','[PHASE 2] transform() — attempt 3/3');
+  addLog('new-log','info','[ENV]   transform service coming back online...');
+  await sleep(1200);
+
+  // Environment recovered — transform succeeds
+  setPhase(2,'done','recovered ✓');
+  setStep('new-s2','recovered','recovered','environment recovered on attempt 3');
+  setProgress('new-progress',66);
+  addLog('new-log','recover','[PHASE 2] transform service recovered. Processing data...');
+  await sleep(600);
+  addLog('new-log','ok','[PHASE 2] transform() completed successfully on attempt 3');
+  addLog('new-log','recover','No manual intervention. No code change. Environment healed itself.');
+  await sleep(400);
+
+  // ── PHASE 3: runs normally ──
+  setPhase(3,'running','saving...');
+  setStep('new-s3','running','running','writing output...');
+  setProgress('new-progress',82);
+  addLog('new-log','info','[PHASE 3] save() started');
+  await sleep(900);
+
+  setPhase(3,'done','done ✓');
+  setStep('new-s3','done','done','output.json written');
+  setProgress('new-progress',100);
+  addLog('new-log','ok','[PHASE 3] save() completed — output.json written');
+  await sleep(300);
+  addLog('new-log','ok','Flow run COMPLETED — ETL Pipeline');
+  addLog('new-log','cache','Phase 1: ran once, cached · Phase 2: retried 2x, recovered · Phase 3: complete');
+
+  pfRetries++;
+  cacheHitsCount++;
+  timeSaved=4;
+  updateMetrics();
+
+  markCacheHit('fetch_data::hash:a3f9c2');
+  addCloudRun(name,'COMPLETED','Phase 1 cached · Phase 2 recovered after 2 retries · Phase 3 complete','~16s');
+  showResult('new-result','success','Pipeline complete. Phase 2 recovered on attempt 3. Phase 1 never repeated. Zero manual intervention.');
+  showKeyMoment('resume','Phase 2 retried through the ConnectionError and the environment recovered by itself. Phase 1 was cached — never ran again. Cron would have lost everything and started over.');
+
+  pfRunning=false;
+  document.getElementById('btn-pf').disabled=false;
+  document.getElementById('pf-hint').textContent='Done. Reset to run again.';
+}
+
+function resetNew(){
+  pfRunning=false;
+  document.getElementById('btn-pf').disabled=false;
+  document.getElementById('new-log').innerHTML='';
+  document.getElementById('new-result').className='result-box';
+  document.getElementById('pf-hint').textContent='Single run — Phase 1 caches, Phase 2 retries through ConnectionError, environment recovers, pipeline completes.';
+  document.getElementById('key-moment').className='key-moment';
+  setProgress('new-progress',0);
+  resetSteps('new');
+  [1,2,3].forEach(n=>setPhase(n,'idle',['fetch_data','transform','save'][n-1]));
+  document.getElementById('cache-store').innerHTML='<div class="cache-empty">Cache is empty — Phase 1 will populate this when it completes</div>';
+}
+</script>
+</body>
+</html>
